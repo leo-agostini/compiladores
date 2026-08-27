@@ -66,15 +66,14 @@ var reserved = map[string]reservedWord{
 	"pj":          {"BOOL_LITERAL", "false"},
 
 	// Palavras-chave em ingles.
-	"if":      {"KEYWORD", "if"},
-	"else if": {"KEYWORD", "else if"},
-	"else":    {"KEYWORD", "else"},
-	"for":     {"KEYWORD", "for"},
-	"while":   {"KEYWORD", "while"},
-	"return":  {"KEYWORD", "return"},
-	"print":   {"KEYWORD", "print"},
-	"true":    {"BOOL_LITERAL", "true"},
-	"false":   {"BOOL_LITERAL", "false"},
+	"if":     {"KEYWORD", "if"},
+	"else":   {"KEYWORD", "else"},
+	"for":    {"KEYWORD", "for"},
+	"while":  {"KEYWORD", "while"},
+	"return": {"KEYWORD", "return"},
+	"print":  {"KEYWORD", "print"},
+	"true":   {"BOOL_LITERAL", "true"},
+	"false":  {"BOOL_LITERAL", "false"},
 
 	// Tipos.
 	"int":    {"TYPE", "int"},
@@ -111,6 +110,20 @@ func tokenize(code string) []Token {
 				if word, ok := reserved[value]; ok {
 					token.Type = word.tokenType
 					token.Concept = word.concept
+				}
+			}
+
+			// "else if" nao pode casar como WORD (o regex nao aceita
+			// espaco), entao else seguido de if e fundido aqui num token
+			// so, igualando "senao caso" ao "recurso" de uma palavra.
+			if token.Concept == "if" && len(tokens) > 0 {
+				if prev := &tokens[len(tokens)-1]; prev.Concept == "else" {
+					prev.Concept = "else if"
+					prev.Value += " " + value
+					line += strings.Count(value, "\n")
+					pos += len(value)
+					matched = true
+					break
 				}
 			}
 
