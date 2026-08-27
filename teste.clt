@@ -1,0 +1,42 @@
+/*
+ * Programa de teste da linguagem CLT.
+ * Comentario de bloco em varias linhas.
+ */
+
+// Declaracao de variaveis com tipagem estatica
+carteira int horas = 44;
+carteira string nome = "Ana";
+carteira float taxa = 1.5;   // comentario no fim da linha
+carteira bool ativo = registrado;
+
+// Declaracao de funcao: tipo de retorno, nome, parametros tipados e corpo
+float calcular(int base, float adicional) {
+    rescindir base + adicional * 2;
+}
+
+// Funcao sem retorno usa void
+void avisar(string mensagem) {
+    bater_ponto(mensagem);
+}
+
+caso (horas >= 44) {
+    // chamada de funcao com um argumento
+    avisar("hora extra");
+    taxa = calcular(horas, taxa);   // chamada com dois argumentos
+    ativo = pj;
+} senao {
+    plantao (horas != 0) {
+        horas = horas - 1;
+        caso (horas <= 10) {
+            falta;
+        }
+    }
+}
+
+// divisao nao pode ser confundida com comentario
+taxa = taxa / 2;
+
+carteira int /* bloco no meio da linha */ extras = 0;
+
+nome = reclamacao();
+bater_ponto(nome);
