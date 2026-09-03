@@ -1,0 +1,39 @@
+// testes comuns validos — o lexer deve sair 0
+
+carteira string vazia = "";
+carteira string nome = "Ana";
+carteira string msg = "diz \"oi\" e usa \\n \\t \\r \\0";
+carteira float taxa = 1.5;
+carteira float zero = 0.0;
+carteira int horas = 44;
+carteira bool ativo = registrado;
+carteira bool off = pj;
+
+// divisao nao e comentario
+taxa = taxa / 2;
+taxa = taxa//comentario colado
+
+carteira int /* bloco no meio */ extras = 0;
+
+/* bloco
+   em varias
+   linhas */
+
+senao caso (horas >= 10) {
+    falta;
+}
+
+else if (horas != 0) {
+    rescindir horas + extras * 2;
+}
+
+// comentario entre senao e caso ainda deve fundir
+senao /*meio*/ caso (ativo) {
+    bater_ponto(nome);
+}
+
+void avisar(string mensagem) {
+    bater_ponto(mensagem);
+}
+
+nome = reclamacao();
