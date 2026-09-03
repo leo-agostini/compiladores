@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 type Token struct {
@@ -14,11 +15,17 @@ type Token struct {
 	Concept string
 	Value   string
 	Line    int
+	Column  int
+	// Message explica a causa de um ERROR. Vazio nos tokens validos.
+	Message string
 }
 
 type rule struct {
 	tokenType string
 	pattern   *regexp.Regexp
+	// message so e preenchido nas regras de ERROR: descreve por que o lexema
+	// casado e invalido.
+	message string
 }
 
 // anchored ancora o padrao no inicio do texto restante, para casar token a
@@ -30,16 +37,93 @@ func anchored(pattern string) *regexp.Regexp {
 // A ordem importa: o primeiro padrao que casar vence. Por isso os operadores
 // de dois caracteres vem antes dos de um (== antes de =) e FLOAT antes de INT
 // (senao "3.14" viraria INT 3 seguido de lixo).
+//
+// As regras de ERROR moram na mesma tabela: um lexema malformado e consumido
+// inteiro por um padrao proprio, o que da a mensagem e evita a cascata (o texto
+// ruim nao volta para o laco virando identificadores soltos). Como Go usa RE2,
+// que nao tem lookahead, onde seria preciso "casar X mas nao Y" a regra de erro
+// vem depois da regra valida e fica so com o que sobrou.
 var rules = []rule{
-	{"COMMENT", anchored(`//[^\n]*`)},
-	{"COMMENT", anchored(`/\*[\s\S]*?\*/`)},
-	{"WORD", anchored(`[a-zA-Z_][a-zA-Z0-9_]*`)},
-	{"FLOAT", anchored(`\d+\.\d+`)},
-	{"INT", anchored(`\d+`)},
-	{"STRING", anchored(`"(\\.|[^"\\\n])*"`)},
-	{"OPERATOR", anchored(`==|!=|<=|>=|[+\-*/<>=]`)},
-	{"DELIMITER", anchored(`[{}();,]`)},
+	{tokenType: "COMMENT", pattern: anchored(`//[^\n]*`)},
+	{tokenType: "COMMENT", pattern: anchored(`/\*[\s\S]*?\*/`)},
+	// Depois do bloco fechado, senao todo /* ... */ valido viraria erro.
+	{tokenType: "ERROR", pattern: anchored(`/\*[\s\S]*`),
+		message: "comentario de bloco aberto e nunca fechado com */"},
+
+	{tokenType: "WORD", pattern: anchored(`[a-zA-Z_][a-zA-Z0-9_]*`)},
+
+	// Numeros malformados, todos antes de FLOAT/INT para vencer a leitura
+	// parcial ("1.2.3" seria FLOAT 1.2 seguido de lixo).
+	{tokenType: "ERROR", pattern: anchored(`0[xXbBoO][0-9a-fA-F_]*`),
+		message: "notacao hexadecimal/binaria nao existe; use numeros decimais"},
+	{tokenType: "ERROR", pattern: anchored(`\d+(?:\.\d+)?[eE][+-]?\d+`),
+		message: "notacao cientifica nao existe na linguagem"},
+	{tokenType: "ERROR", pattern: anchored(`\d+(?:\.\d+){2,}`),
+		message: "float com mais de um ponto decimal"},
+	{tokenType: "ERROR", pattern: anchored(`\d+(?:\.\d+)?[a-zA-Z_][a-zA-Z0-9_]*`),
+		message: "numero colado em identificador; falta um operador ou espaco"},
+	{tokenType: "ERROR", pattern: anchored(`\.\d+`),
+		message: "float sem parte inteira; escreva 0.5 em vez de .5"},
+
+	{tokenType: "FLOAT", pattern: anchored(`\d+\.\d+`)},
+	// Depois de FLOAT: "1.5" ja casou acima, entao aqui so cai o "1." solto.
+	{tokenType: "ERROR", pattern: anchored(`\d+\.`),
+		message: "float sem parte decimal; escreva 1.0 em vez de 1."},
+	{tokenType: "INT", pattern: anchored(`\d+`)},
+
+	{tokenType: "STRING", pattern: anchored(`"(\\.|[^"\\\n])*"`)},
+	// Depois de STRING: sobra a abertura sem fechamento, consumida ate o fim
+	// da linha para o conteudo nao virar identificador.
+	{tokenType: "ERROR", pattern: anchored(`"(?:\\.|[^"\\\n])*`),
+		message: "string nao terminada; falta fechar as aspas na mesma linha"},
+	{tokenType: "ERROR", pattern: anchored(`'(?:\\.|[^'\\\n])*'?`),
+		message: "aspas simples nao existem na linguagem; use aspas duplas"},
+
+	// Operadores de outras linguagens: antes de OPERATOR, senao "++" viraria
+	// dois "+". Em cada alternativa o ramo mais longo vem primeiro, porque Go
+	// casa a primeira alternativa que der certo, nao a mais longa.
+	{tokenType: "ERROR", pattern: anchored(`&&|\|\|`),
+		message: "operadores logicos && e || nao existem na linguagem"},
+	{tokenType: "ERROR", pattern: anchored(`\+\+|--`),
+		message: "incremento/decremento nao existe; use x = x + 1"},
+	{tokenType: "ERROR", pattern: anchored(`\+=|-=|\*=|/=|%=`),
+		message: "atribuicao composta nao existe; use x = x + 1"},
+	{tokenType: "ERROR", pattern: anchored(`<<|>>`),
+		message: "operadores de deslocamento de bits nao existem na linguagem"},
+
+	{tokenType: "OPERATOR", pattern: anchored(`==|!=|<=|>=|[+\-*/<>=]`)},
+
+	// Depois de OPERATOR: "!=" ja casou acima, entao aqui so cai o "!" sozinho.
+	{tokenType: "ERROR", pattern: anchored(`!`),
+		message: "negacao '!' so e valida em '!='"},
+	{tokenType: "ERROR", pattern: anchored(`%`),
+		message: "operador de modulo '%' nao existe na linguagem"},
+	{tokenType: "ERROR", pattern: anchored(`[&|]`),
+		message: "caractere invalido; a linguagem nao tem operadores de bits"},
+	{tokenType: "ERROR", pattern: anchored(`\.`),
+		message: "'.' invalido; a linguagem nao tem acesso a campo"},
+
+	{tokenType: "DELIMITER", pattern: anchored(`[{}();,]`)},
 }
+
+// Caracteres que nao iniciam nenhum lexema. Servem so para trocar o
+// "fora do alfabeto" generico por uma explicacao do que o programador tentou.
+var unknownChar = map[rune]string{
+	'@':  "caractere '@' nao faz parte do alfabeto da linguagem",
+	'#':  "caractere '#' invalido; comentario e // ou /* */",
+	'$':  "caractere '$' nao faz parte do alfabeto da linguagem",
+	'`':  "crase invalida; strings usam aspas duplas",
+	'[':  "'[' invalido; a linguagem nao tem vetores",
+	']':  "']' invalido; a linguagem nao tem vetores",
+	'?':  "'?' invalido; a linguagem nao tem operador ternario",
+	':':  "caractere ':' nao faz parte do alfabeto da linguagem",
+	'\\': "'\\' so e valido dentro de uma string",
+	'~':  "caractere '~' nao faz parte do alfabeto da linguagem",
+	'^':  "caractere '^' nao faz parte do alfabeto da linguagem",
+}
+
+// Escapes aceitos dentro de uma string.
+var validEscapes = map[byte]bool{'n': true, 't': true, 'r': true, '0': true, '"': true, '\\': true}
 
 type reservedWord struct {
 	tokenType string
@@ -80,6 +164,7 @@ var reserved = map[string]reservedWord{
 	"string": {"TYPE", "string"},
 	"float":  {"TYPE", "float"},
 	"bool":   {"TYPE", "bool"},
+	"void":   {"TYPE", "void"},
 }
 
 var whitespace = anchored(`[ \t\r\n]+`)
@@ -104,12 +189,21 @@ func tokenize(code string) []Token {
 				continue
 			}
 
-			token := Token{Type: r.tokenType, Value: value, Line: line}
+			token := Token{Type: r.tokenType, Value: value, Line: line, Column: columnOf(code, pos), Message: r.message}
 			if token.Type == "WORD" {
 				token.Type = "IDENTIFIER"
 				if word, ok := reserved[value]; ok {
 					token.Type = word.tokenType
 					token.Concept = word.concept
+				}
+			}
+
+			// O regex de STRING aceita qualquer coisa depois da barra, entao
+			// o escape so da para validar com o lexema ja em maos.
+			if token.Type == "STRING" {
+				if escape, bad := invalidEscape(value); bad {
+					token.Type = "ERROR"
+					token.Message = `escape invalido \` + escape + ` na string; validos: \n \t \r \0 \" \\`
 				}
 			}
 
@@ -137,14 +231,52 @@ func tokenize(code string) []Token {
 		}
 
 		// Caractere fora do alfabeto da linguagem: registra o erro lexico e
-		// segue, para reportar todos os problemas numa passada so.
+		// segue, para reportar todos os problemas numa passada so. Consome uma
+		// rune inteira, senao um caractere acentuado viraria dois erros com
+		// bytes quebrados no lexema.
 		if !matched {
-			tokens = append(tokens, Token{Type: "ERROR", Value: string(code[pos]), Line: line})
-			pos++
+			r, size := utf8.DecodeRuneInString(rest)
+			message, ok := unknownChar[r]
+			if !ok {
+				message = fmt.Sprintf("caractere %q fora do alfabeto da linguagem", r)
+			}
+			tokens = append(tokens, Token{
+				Type:    "ERROR",
+				Value:   string(r),
+				Line:    line,
+				Column:  columnOf(code, pos),
+				Message: message,
+			})
+			pos += size
 		}
 	}
 
 	return tokens
+}
+
+// invalidEscape devolve o primeiro escape nao suportado do lexema de uma
+// string. O lexema chega ja delimitado pelas aspas e com os escapes casados aos
+// pares, entao basta olhar o caractere seguinte a cada barra.
+func invalidEscape(value string) (string, bool) {
+	for i := 0; i < len(value)-1; i++ {
+		if value[i] != '\\' {
+			continue
+		}
+		if !validEscapes[value[i+1]] {
+			return string(value[i+1]), true
+		}
+		// Pula o caractere escapado: em "\\\\z" a segunda barra ja foi
+		// consumida e o z nao e um escape.
+		i++
+	}
+	return "", false
+}
+
+// columnOf conta a coluna (1-based) da posicao dentro da linha atual. Calcular
+// sob demanda evita ter que manter um contador de coluna sincronizado com os
+// saltos que o laco da ao consumir lexemas multilinha.
+func columnOf(code string, pos int) int {
+	return pos - strings.LastIndex(code[:pos], "\n")
 }
 
 // display achata o lexema em uma linha so e corta o excesso, para que um
@@ -169,21 +301,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	errors := 0
+	var errors []Token
 	for _, token := range tokenize(string(code)) {
 		concept := ""
 		if token.Concept != "" {
 			concept = "(" + token.Concept + ")"
 		}
-		fmt.Printf("linha %2d | %-22s -> %-12s %s\n", token.Line, display(token.Value), token.Type, concept)
+		fmt.Printf("linha %2d, col %2d | %-22s -> %-12s %s\n", token.Line, token.Column, display(token.Value), token.Type, concept)
 
 		if token.Type == "ERROR" {
-			errors++
+			errors = append(errors, token)
 		}
 	}
 
-	if errors > 0 {
-		fmt.Fprintf(os.Stderr, "\n%d erro(s) lexico(s) encontrado(s)\n", errors)
+	if len(errors) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d erro(s) lexico(s) encontrado(s):\n", len(errors))
+		for i, token := range errors {
+			fmt.Fprintf(os.Stderr, "  %d) linha %d, col %d: %s\n     lexema: %s\n",
+				i+1, token.Line, token.Column, token.Message, display(token.Value))
+		}
 		os.Exit(1)
 	}
 }
