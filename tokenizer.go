@@ -150,14 +150,18 @@ var reserved = map[string]reservedWord{
 	"pj":          {"BOOL_LITERAL", "false"},
 
 	// Palavras-chave em ingles.
-	"if":     {"KEYWORD", "if"},
-	"else":   {"KEYWORD", "else"},
-	"for":    {"KEYWORD", "for"},
-	"while":  {"KEYWORD", "while"},
-	"return": {"KEYWORD", "return"},
-	"print":  {"KEYWORD", "print"},
-	"true":   {"BOOL_LITERAL", "true"},
-	"false":  {"BOOL_LITERAL", "false"},
+	"if":       {"KEYWORD", "if"},
+	"else":     {"KEYWORD", "else"},
+	"for":      {"KEYWORD", "for"},
+	"while":    {"KEYWORD", "while"},
+	"function": {"KEYWORD", "function"},
+	"return":   {"KEYWORD", "return"},
+	"print":    {"KEYWORD", "print"},
+	"input":    {"KEYWORD", "input"},
+	"var":      {"KEYWORD", "var"},
+	"break":    {"KEYWORD", "break"},
+	"true":     {"BOOL_LITERAL", "true"},
+	"false":    {"BOOL_LITERAL", "false"},
 
 	// Tipos.
 	"int":    {"TYPE", "int"},
