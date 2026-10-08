@@ -362,8 +362,8 @@ func Parse(tokens []Token) (*Program, []string) {
 	return p.parseProgram(), p.errors
 }
 
-// skipComments avanca pos sobre COMMENT. peek/next/peekAt chamam isto,
-// entao o resto do parser nunca ve comentario: senao "senao /*meio*/
+// skipComments avanca pos sobre COMMENT. peek, peekNext e next chamam
+// isto, entao o resto do parser nunca ve comentario: senao "senao /*meio*/
 // caso" fundiria aqui, e o tokenizer ja recusou essa fusao.
 func (p *Parser) skipComments() {
 	for p.pos < len(p.tokens) && p.tokens[p.pos].Type == "COMMENT" {
@@ -381,20 +381,20 @@ func (p *Parser) peek() Token {
 	return p.tokens[p.pos]
 }
 
-// peekAt olha n tokens a frente sem consumir, pulando COMMENT no caminho.
-// parseAssign usa peekAt(1) para ver se o IDENTIFIER e seguido de "=".
-func (p *Parser) peekAt(offset int) Token {
+// peekNext e o token logo depois do atual, sem consumir. COMMENT no meio
+// nao conta: parseAssign precisa ver se o IDENTIFIER e seguido de "=".
+func (p *Parser) peekNext() Token {
 	p.skipComments()
-	seen := 0
+	passedCurrent := false
 	for i := p.pos; i < len(p.tokens); i++ {
-		t := p.tokens[i]
-		if t.Type == "COMMENT" {
+		if p.tokens[i].Type == "COMMENT" {
 			continue
 		}
-		if seen == offset {
-			return t
+		if !passedCurrent {
+			passedCurrent = true
+			continue
 		}
-		seen++
+		return p.tokens[i]
 	}
 	return Token{}
 }
@@ -517,15 +517,32 @@ func (p *Parser) errorAt(t Token, message string) {
 // startsDecl e a fronteira de synchronize. TYPE inicia funcao C-like;
 // KEYWORD cobre function/var e tambem stmt (if, for, ...): parar num
 // "caso" evita engolir o proximo comando na recuperacao.
+//
+// IDENTIFIER so conta quando o token seguinte mostra comando novo
+// (a = 2, foo(), a;). Parar em tod nome descartaria o argumento em
+// "bater_ponto(a b);" e o synchronize geraria outro erro no ")".
 func (p *Parser) startsDecl(t Token) bool {
 	if t.Type == "TYPE" {
 		return true
 	}
-	if t.Type != "KEYWORD" {
+	if t.Type == "KEYWORD" {
+		switch t.Concept {
+		case "function", "var", "if", "for", "while", "return", "print", "input", "break":
+			return true
+		}
 		return false
 	}
-	switch t.Concept {
-	case "function", "var", "if", "for", "while", "return", "print", "input", "break":
+	if t.Type != "IDENTIFIER" {
+		return false
+	}
+	next := p.peekNext()
+	if next.Type == "OPERATOR" && next.Value == "=" {
+		return true
+	}
+	if next.Type == "DELIMITER" && next.Value == "(" {
+		return true
+	}
+	if next.Type == "DELIMITER" && next.Value == ";" {
 		return true
 	}
 	return false
@@ -547,11 +564,11 @@ func (p *Parser) synchronize() {
 			p.next()
 			continue
 		}
-		if t.Type == "DELIMITER" && t.Value == ";" {
+		if p.checkDelim(";") {
 			p.next()
 			return
 		}
-		if t.Type == "DELIMITER" && (t.Value == "}" || t.Value == "{") {
+		if p.checkDelim("}") || p.checkDelim("{") {
 			return
 		}
 		if p.startsDecl(t) {
@@ -610,14 +627,16 @@ func (p *Parser) parseDecl() Node {
 }
 
 // parseFuncDecl cobre as duas formas: tipo na frente ("void avisar(")
-// e KEYWORD function ("contratar avisar( ... ) void"). keywordForm
+// e KEYWORD function ("contratar avisar( ... ) void"). returnAfterParams
 // adia o Return para depois dos ")".
 func (p *Parser) parseFuncDecl() Node {
 	var ret string
-	keywordForm := false
+	// contratar nome(...) tipo: o retorno vem depois dos parametros.
+	// void nome(...): o tipo ja foi lido aqui.
+	returnAfterParams := false
 	if p.checkConcept("function") {
 		p.next()
-		keywordForm = true
+		returnAfterParams = true
 	} else {
 		ret = p.parseType()
 	}
@@ -634,7 +653,7 @@ func (p *Parser) parseFuncDecl() Node {
 		params = p.parseParams()
 	}
 	p.expectDelim(")", "esperado ')' apos os parametros")
-	if keywordForm && p.peek().Type == "TYPE" {
+	if returnAfterParams && p.peek().Type == "TYPE" {
 		ret = p.parseType()
 	}
 	body := p.parseBlock()
@@ -710,7 +729,7 @@ func (p *Parser) parseStmt() Node {
 		return nil
 	}
 	t := p.peek()
-	if t.Type == "DELIMITER" && t.Value == "{" {
+	if p.checkDelim("{") {
 		return p.parseBlock()
 	}
 	if t.Type == "KEYWORD" {
@@ -768,21 +787,21 @@ func (p *Parser) parseIf() Node {
 	cond := p.parseExpr()
 	p.expectDelim(")", "esperado ')' apos a condicao")
 	then := p.parseStmt()
-	var elifs []ElseIf
+	var elseIfs []ElseIf
 	// else if / senao caso / recurso ja chegam como um token, Concept "else if".
 	// Fundir de novo faria "recurso" virar else seguido de um if solto.
 	for p.checkConcept("else if") {
 		p.next()
 		p.expectDelim("(", "esperado '(' apos else if")
-		c := p.parseExpr()
+		cond := p.parseExpr()
 		p.expectDelim(")", "esperado ')' apos a condicao")
-		elifs = append(elifs, ElseIf{Cond: c, Then: p.parseStmt()})
+		elseIfs = append(elseIfs, ElseIf{Cond: cond, Then: p.parseStmt()})
 	}
-	var els Node
+	var elseBranch Node
 	if p.matchConcept("else") {
-		els = p.parseStmt()
+		elseBranch = p.parseStmt()
 	}
-	return &IfStmt{Cond: cond, Then: then, ElseIfs: elifs, Else: els}
+	return &IfStmt{Cond: cond, Then: then, ElseIfs: elseIfs, Else: elseBranch}
 }
 
 func (p *Parser) parseFor() Node {
@@ -895,15 +914,19 @@ func (p *Parser) parseExpr() Node {
 	return p.parseAssign()
 }
 
-// parseAssign so casa IDENTIFIER "=". Sem peekAt(1), "taxa = 1" viraria
-// Ident seguido de erro no "=". Recursao a direita: a = b = 1.
+// parseAssign so casa IDENTIFIER "=". Sem olhar o proximo token, "taxa = 1"
+// viraria Ident seguido de erro no "=". A chamada recursiva faz a = b = 1.
 func (p *Parser) parseAssign() Node {
-	if p.peek().Type == "IDENTIFIER" && p.peekAt(1).Type == "OPERATOR" && p.peekAt(1).Value == "=" {
-		name := p.next().Value
-		p.next()
-		return &Assign{Name: name, Value: p.parseAssign()}
+	if p.peek().Type != "IDENTIFIER" {
+		return p.parseEquality()
 	}
-	return p.parseEquality()
+	next := p.peekNext()
+	if next.Type != "OPERATOR" || next.Value != "=" {
+		return p.parseEquality()
+	}
+	name := p.next().Value
+	p.next()
+	return &Assign{Name: name, Value: p.parseAssign()}
 }
 
 func (p *Parser) parseEquality() Node {
@@ -986,26 +1009,16 @@ func (p *Parser) parsePrimary() Node {
 	case "IDENTIFIER":
 		p.next()
 		if p.checkDelim("(") {
-			p.next()
-			var args []Node
-			if !p.checkDelim(")") {
-				args = p.parseArgs()
-			}
-			p.expectDelim(")", "esperado ')' apos os argumentos")
-			return &Call{Name: t.Value, Args: args}
+			return p.parseCall(t.Value)
 		}
 		return &Ident{Name: t.Value}
 	case "KEYWORD":
-		if (t.Concept == "print" || t.Concept == "input") &&
-			p.peekAt(1).Type == "DELIMITER" && p.peekAt(1).Value == "(" {
+		// print/input com "(" sao expressao (nome = reclamacao()), nao o
+		// comando, que e quem consome o ";".
+		next := p.peekNext()
+		if (t.Concept == "print" || t.Concept == "input") && next.Type == "DELIMITER" && next.Value == "(" {
 			p.next()
-			p.next()
-			var args []Node
-			if !p.checkDelim(")") {
-				args = p.parseArgs()
-			}
-			p.expectDelim(")", "esperado ')' apos os argumentos")
-			return &Call{Name: t.Value, Args: args}
+			return p.parseCall(t.Value)
 		}
 	}
 	if t.Type == "DELIMITER" && t.Value == "(" {
@@ -1016,6 +1029,17 @@ func (p *Parser) parsePrimary() Node {
 	}
 	p.errorAt(t, "esperado expressao")
 	return nil
+}
+
+// parseCall consome "(" args ")" depois que o nome ja foi lido.
+func (p *Parser) parseCall(name string) *Call {
+	p.next()
+	var args []Node
+	if !p.checkDelim(")") {
+		args = p.parseArgs()
+	}
+	p.expectDelim(")", "esperado ')' apos os argumentos")
+	return &Call{Name: name, Args: args}
 }
 
 func (p *Parser) parseArgs() []Node {

@@ -54,7 +54,9 @@ var rules = []rule{
 
 	// Numeros malformados, todos antes de FLOAT/INT para vencer a leitura
 	// parcial ("1.2.3" seria FLOAT 1.2 seguido de lixo).
-	{tokenType: "ERROR", pattern: anchored(`0[xXbBoO][0-9a-fA-F_]*`),
+	// O sufixo aceita qualquer letra: so [0-9a-f] deixaria "0xG" como
+	// ERROR "0x" seguido de IDENTIFIER "G".
+	{tokenType: "ERROR", pattern: anchored(`0[xXbBoO][0-9a-zA-Z_]*`),
 		message: "notacao hexadecimal/binaria nao existe; use numeros decimais"},
 	{tokenType: "ERROR", pattern: anchored(`\d+(?:\.\d+)?[eE][+-]?\d+`),
 		message: "notacao cientifica nao existe na linguagem"},
@@ -72,6 +74,10 @@ var rules = []rule{
 	{tokenType: "INT", pattern: anchored(`\d+`)},
 
 	{tokenType: "STRING", pattern: anchored(`"(\\.|[^"\\\n])*"`)},
+	// Quebra de linha com a aspa de fechamento na linha seguinte: um erro
+	// so. Sem exigir a aspa, "x\ny = 1;" engoliria o comando de baixo.
+	{tokenType: "ERROR", pattern: anchored(`"(?:\\.|[^"\\\n])*\n[ \t]*(?:[a-zA-Z_][a-zA-Z0-9_]*)?"`),
+		message: "string nao terminada; falta fechar as aspas na mesma linha"},
 	// Depois de STRING: sobra a abertura sem fechamento, consumida ate o fim
 	// da linha para o conteudo nao virar identificador.
 	{tokenType: "ERROR", pattern: anchored(`"(?:\\.|[^"\\\n])*`),
@@ -276,21 +282,12 @@ func invalidEscape(value string) (string, bool) {
 	return "", false
 }
 
-// columnOf conta a coluna (1-based) da posicao dentro da linha atual. Calcular
-// sob demanda evita ter que manter um contador de coluna sincronizado com os
-// saltos que o laco da ao consumir lexemas multilinha.
+// columnOf conta a coluna (1-based) em runes, nao em bytes. "á" ocupa
+// dois bytes: sem contar runes, o token seguinte reportaria uma coluna a mais.
+// lastPos reusa essa coluna quando o erro e no fim da entrada.
 func columnOf(code string, pos int) int {
-	return pos - strings.LastIndex(code[:pos], "\n")
-}
-
-// display achata o lexema em uma linha so e corta o excesso, para que um
-// comentario de bloco multilinha nao quebre a tabela da saida.
-func display(value string) string {
-	flat := strings.Join(strings.Fields(value), " ")
-	if runes := []rune(flat); len(runes) > 22 {
-		flat = string(runes[:19]) + "..."
-	}
-	return flat
+	lineStart := strings.LastIndex(code[:pos], "\n") + 1
+	return len([]rune(code[lineStart:pos])) + 1
 }
 
 func main() {
@@ -307,6 +304,9 @@ func main() {
 
 	tree, errs := Parse(tokenize(string(code)))
 	if tree != nil {
+		if len(errs) > 0 {
+			fmt.Println("AST parcial (contém erros):")
+		}
 		fmt.Print(tree.Pretty(""))
 	}
 	if len(errs) > 0 {
