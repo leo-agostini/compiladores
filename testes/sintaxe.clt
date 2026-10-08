@@ -1,0 +1,40 @@
+// testes de erro sintatico — o lexer sai limpo, a gramatica e que nao fecha
+
+// 1. falta o ';' no fim da declaracao
+carteira int horas = 44
+
+// 2. 'carteira' sem tipo
+carteira nome = "Ana";
+
+// 3. ')' nao fechado na condicao
+caso (horas >= 10 {
+    bater_ponto("oi");
+}
+
+// 4. 'senao' sem um 'caso' antes
+senao {
+    bater_ponto("nunca");
+}
+
+// 5. expressao terminando em operador
+carteira int total = horas + ;
+
+// 6. tipo no topo que nao abre funcao
+int soma = 1;
+
+// 7. virgula sobrando na chamada
+bater_ponto(horas, );
+
+// 8. parametro sem tipo
+void avisar(mensagem) {
+    bater_ponto(mensagem);
+}
+
+// 9. 'falta' sem ';'
+plantao (horas != 0) {
+    falta
+}
+
+// 10. bloco nao fechado no fim do arquivo
+caso (horas == 0) {
+    horas = 1;

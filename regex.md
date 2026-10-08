@@ -1,6 +1,6 @@
 # Os regex do tokenizer, caractere a caractere
 
-Documentacao de todos os 26 padroes de [lexical-analysis.go](lexical-analysis.go). Cada secao mostra
+Documentacao de todos os 27 padroes de [lexical-analysis.go](lexical-analysis.go). Cada secao mostra
 o padrao, decompoe cada caractere e da exemplos do que casa e do que nao casa.
 
 ---
@@ -57,7 +57,7 @@ linear. Duas consequencias que aparecem o tempo todo neste tokenizer:
   porque esta escrito primeiro, nao porque e mais longo. Trocar a ordem quebraria o `==`.
 
 Invariante importante do laco: `FindString` devolve `""` tanto para "nao casou" quanto
-para "casou vazio", e o codigo trata `""` como nao-casou. Todos os 26 padroes exigem no
+para "casou vazio", e o codigo trata `""` como nao-casou. Todos os 27 padroes exigem no
 minimo um caractere, entao nunca casam vazio — uma regra nova precisa manter isso, ou o
 laco entra em loop infinito.
 
@@ -142,7 +142,7 @@ viraria **um** comentario so, engolindo `codigo` no meio.
 O mesmo padrao anterior sem o `\*/` final e com `*` guloso: consome do `/*` ate o fim do
 arquivo.
 
-So e alcancado quando a regra 48 falha, ou seja, quando nao existe nenhum `*/` a frente
+So e alcancado quando a regra 47 falha, ou seja, quando nao existe nenhum `*/` a frente
 — e por isso ela vem **depois** na tabela. Invertendo a ordem, todo comentario de bloco
 valido do arquivo viraria erro.
 
@@ -177,25 +177,29 @@ inteiro, e nao a palavra `caso` seguida de um `s` solto.
 Sao oito padroes. Os cinco de erro vem **antes** de FLOAT e INT na tabela, senao o
 numero malformado seria lido pela metade: `1.2.3` viraria FLOAT `1.2` mais lixo.
 
-### `0[xXbBoO][0-9a-fA-F_]*` — ERROR, hexadecimal/binario ([lexical-analysis.go:56](lexical-analysis.go#L56))
+### `0[xXbBoO][0-9a-zA-Z_]*` — ERROR, hexadecimal/binario ([lexical-analysis.go:58](lexical-analysis.go#L58))
 
 | Trecho | Leitura |
 |---|---|
 | `0` | o digito zero, literal |
 | `[xXbBoO]` | uma das letras de prefixo: hexa, binario ou octal, em maiuscula ou minuscula |
-| `[0-9a-fA-F_]` | digito, letra de `a` a `f` (os digitos hexa) ou `_` |
+| `[0-9a-zA-Z_]` | digito, qualquer letra ou `_` |
 | `*` | zero ou mais |
 
 O `*` no fim deixa `0x` sozinho tambem casar — melhor dar erro de "notacao nao existe"
 do que deixar passar.
 
+A classe aceita **qualquer** letra, e nao so os digitos hexa `a-f`: com `[0-9a-fA-F_]`,
+`0xG` viraria ERROR `0x` seguido de um IDENTIFIER `G` solto, ou seja, dois problemas
+reportados para um engano so.
+
 Nao afeta o zero comum: `0[xXbBoO]` exige uma letra logo apos o `0`, entao em `0;` ou
 `0.0` este padrao falha na segunda posicao.
 
-- Casa: `0x1F`, `0b1010`, `0o777`, `0x`
+- Casa: `0x1F`, `0b1010`, `0o777`, `0x`, `0xG`
 - Nao casa: `0`, `0.0`, `10`
 
-### `\d+(?:\.\d+)?[eE][+-]?\d+` — ERROR, notacao cientifica ([lexical-analysis.go:58](lexical-analysis.go#L58))
+### `\d+(?:\.\d+)?[eE][+-]?\d+` — ERROR, notacao cientifica ([lexical-analysis.go:60](lexical-analysis.go#L60))
 
 | Trecho | Leitura |
 |---|---|
@@ -216,7 +220,7 @@ capturados, entao nao ha motivo para o motor guardar o texto do grupo.
 - Casa: `1e10`, `1.5e-2`, `3E+8`
 - Nao casa: `1e` (falta expoente), `e10` (falta mantissa — vira identificador)
 
-### `\d+(?:\.\d+){2,}` — ERROR, float com varios pontos ([lexical-analysis.go:60](lexical-analysis.go#L60))
+### `\d+(?:\.\d+){2,}` — ERROR, float com varios pontos ([lexical-analysis.go:62](lexical-analysis.go#L62))
 
 | Trecho | Leitura |
 |---|---|
@@ -231,7 +235,7 @@ aqui.
 - Casa: `1.2.3`, `1.5.2.3`
 - Nao casa: `1.5`, `44`
 
-### `\d+(?:\.\d+)?[a-zA-Z_][a-zA-Z0-9_]*` — ERROR, numero colado em identificador ([lexical-analysis.go:62](lexical-analysis.go#L62))
+### `\d+(?:\.\d+)?[a-zA-Z_][a-zA-Z0-9_]*` — ERROR, numero colado em identificador ([lexical-analysis.go:64](lexical-analysis.go#L64))
 
 E a juncao do padrao de numero com o de identificador: `\d+`, uma parte decimal
 opcional, e em seguida um identificador completo, sem nada entre eles.
@@ -243,7 +247,7 @@ era exatamente o bug de antes.
 - Casa: `44horas`, `1.5x`, `10_total`
 - Nao casa: `44 horas` (o espaco separa), `horas44` (comeca com letra, vira WORD)
 
-### `\.\d+` — ERROR, float sem parte inteira ([lexical-analysis.go:64](lexical-analysis.go#L64))
+### `\.\d+` — ERROR, float sem parte inteira ([lexical-analysis.go:66](lexical-analysis.go#L66))
 
 | Trecho | Leitura |
 |---|---|
@@ -253,21 +257,21 @@ era exatamente o bug de antes.
 - Casa: `.5`, `.25`
 - Nao casa: `.` sozinho (cai na regra do ponto isolado, mais abaixo)
 
-### `\d+\.\d+` — FLOAT ([lexical-analysis.go:67](lexical-analysis.go#L67))
+### `\d+\.\d+` — FLOAT ([lexical-analysis.go:69](lexical-analysis.go#L69))
 
 Digitos, ponto literal, digitos. Exige numero dos dois lados do ponto — e essa exigencia
 que deixa `1.` e `.5` sobrarem para as regras de erro.
 
-### `\d+\.` — ERROR, float sem parte decimal ([lexical-analysis.go:69](lexical-analysis.go#L69))
+### `\d+\.` — ERROR, float sem parte decimal ([lexical-analysis.go:71](lexical-analysis.go#L71))
 
 Digitos seguidos de ponto, sem exigir nada depois.
 
 Sozinho, este padrao tambem casaria o comeco de `1.5`. Ele nao estraga o FLOAT porque
-esta escrito **depois** dele na tabela: em `1.5` a regra 68 ja venceu, e so um `1.` de
+esta escrito **depois** dele na tabela: em `1.5` a regra 69 ja venceu, e so um `1.` de
 verdade chega ate aqui. Este e o caso mais claro de "ordem substituindo o lookahead que
 o RE2 nao tem" — com lookahead seria `\d+\.(?!\d)`.
 
-### `\d+` — INT ([lexical-analysis.go:71](lexical-analysis.go#L71))
+### `\d+` — INT ([lexical-analysis.go:73](lexical-analysis.go#L73))
 
 Um ou mais digitos. Vem por ultimo entre os numeros: se viesse antes de FLOAT, `3.14`
 seria lido como INT `3` e o resto viraria lixo.
@@ -276,7 +280,7 @@ seria lido como INT `3` e o resto viraria lixo.
 
 ## 6. Strings e caracteres
 
-### `"(\\.|[^"\\\n])*"` — STRING ([lexical-analysis.go:73](lexical-analysis.go#L73))
+### `"(\\.|[^"\\\n])*"` — STRING ([lexical-analysis.go:75](lexical-analysis.go#L75))
 
 O padrao mais denso do arquivo. Contando caractere a caractere:
 
@@ -313,7 +317,38 @@ de escape acontece em Go, na funcao `invalidEscape`, sobre o lexema ja casado.
 - Casa: `"Ana"`, `""`, `"diz \"oi\""`, `"barra dupla \\z"`
 - Nao casa: `"quebra` + nova linha, `'A'`
 
-### `"(?:\\.|[^"\\\n])*` — ERROR, string nao terminada ([lexical-analysis.go:76](lexical-analysis.go#L76))
+### `"(?:\\.|[^"\\\n])*\n[ \t]*(?:[a-zA-Z_][a-zA-Z0-9_]*)?"` — ERROR, string quebrada em duas linhas ([lexical-analysis.go:78](lexical-analysis.go#L78))
+
+| Trecho | Leitura |
+|---|---|
+| `"(?:\\.\|[^"\\\n])*` | a abertura e o conteudo da primeira linha, igual a STRING |
+| `\n` | a quebra de linha que nao deveria estar ali |
+| `[ \t]*` | indentacao opcional no comeco da segunda linha |
+| `(?:[a-zA-Z_][a-zA-Z0-9_]*)?` | no maximo **uma** palavra na segunda linha |
+| `"` | e a aspa que fecharia a string |
+
+Pega o caso `"multi` + nova linha + `linha"`, em que o programador quis uma string de
+duas linhas. Sem esta regra, saem **dois** erros (a abertura `"multi` e depois a aspa
+`";` como outra string nao terminada) com um IDENTIFIER `linha` no meio.
+
+A segunda linha e restrita de proposito a uma palavra so. Uma versao generosa como
+`[^"\n]*"` atravessaria para a linha seguinte e, em
+
+```
+carteira string a = "nao fecha;
+carteira string b = "x";
+```
+
+engoliria a declaracao de `b` ate a aspa de abertura dela. Com a restricao, a primeira
+linha cai na regra seguinte e a segunda e lida normalmente.
+
+Vem **depois** de STRING (uma string valida nunca tem `\n`, entao nao ha disputa) e
+**antes** da string nao terminada, que tambem casaria o comeco do mesmo texto.
+
+- Casa: `"multi` + nova linha + `linha"`, `"a` + nova linha + `    b"`
+- Nao casa: `"nao fecha;` + nova linha + `carteira ...`
+
+### `"(?:\\.|[^"\\\n])*` — ERROR, string nao terminada ([lexical-analysis.go:82](lexical-analysis.go#L82))
 
 Identico ao anterior, sem as aspas de fechamento (e com `(?:`). Consome da aspa aberta
 ate o fim da linha.
@@ -322,7 +357,7 @@ Vem **depois** de STRING, entao so recebe o que nao tinha par. E consumir tudo a
 da linha e o que mata a cascata: antes, `"nao fecha;` gerava um ERROR na aspa e depois
 tokenizava `nao` e `fecha` como identificadores.
 
-### `'(?:\\.|[^'\\\n])*'?` — ERROR, aspas simples ([lexical-analysis.go:78](lexical-analysis.go#L78))
+### `'(?:\\.|[^'\\\n])*'?` — ERROR, aspas simples ([lexical-analysis.go:84](lexical-analysis.go#L84))
 
 Mesma estrutura, com `'` no lugar de `"`, e o fechamento marcado com `?`:
 
@@ -344,7 +379,7 @@ manda usar aspas duplas.
 Os quatro padroes de erro abaixo vem **antes** de OPERATOR. Sem isso, `++` seria lido
 como dois `+` validos e nenhum erro apareceria.
 
-### `&&|\|\|` — ERROR, operadores logicos ([lexical-analysis.go:84](lexical-analysis.go#L84))
+### `&&|\|\|` — ERROR, operadores logicos ([lexical-analysis.go:90](lexical-analysis.go#L90))
 
 - `&` `&` — dois "e comercial" literais; `&` nao tem poder especial em regex
 - `|` — a alternativa
@@ -352,7 +387,7 @@ como dois `+` validos e nenhum erro apareceria.
   escape, senao seria mais uma alternativa (e `&&|||` seria lido como "`&&` ou vazio ou
   vazio")
 
-### `\+\+|--` — ERROR, incremento/decremento ([lexical-analysis.go:86](lexical-analysis.go#L86))
+### `\+\+|--` — ERROR, incremento/decremento ([lexical-analysis.go:92](lexical-analysis.go#L92))
 
 - `\+` `\+` — dois `+` literais; sem a barra, `+` seria o quantificador "um ou mais"
 - `|` — ou
@@ -361,19 +396,19 @@ como dois `+` validos e nenhum erro apareceria.
 O contraste `\+` versus `-` na mesma linha resume a regra: escapa-se so o que tem poder
 naquela posicao.
 
-### `\+=|-=|\*=|/=|%=` — ERROR, atribuicao composta ([lexical-analysis.go:88](lexical-analysis.go#L88))
+### `\+=|-=|\*=|/=|%=` — ERROR, atribuicao composta ([lexical-analysis.go:94](lexical-analysis.go#L94))
 
 Cinco alternativas de dois caracteres. Os escapes: `\+` (quantificador) e `\*`
 (quantificador). Ja `/` e `%` sao literais comuns — em Go o padrao e uma string, nao
 tem delimitadores `/.../` como em JavaScript, entao a barra nao precisa de escape.
 
-### `<<|>>` — ERROR, deslocamento de bits ([lexical-analysis.go:90](lexical-analysis.go#L90))
+### `<<|>>` — ERROR, deslocamento de bits ([lexical-analysis.go:96](lexical-analysis.go#L96))
 
 Quatro caracteres literais em duas alternativas. `<` e `>` nao sao especiais em RE2.
 
 Nao conflita com `<=` e `>=`, que tem o segundo caractere diferente.
 
-### `==|!=|<=|>=|[+\-*/<>=]` — OPERATOR ([lexical-analysis.go:93](lexical-analysis.go#L93))
+### `==|!=|<=|>=|[+\-*/<>=]` — OPERATOR ([lexical-analysis.go:99](lexical-analysis.go#L99))
 
 | Trecho | Leitura |
 |---|---|
@@ -395,18 +430,18 @@ O `\-` e o detalhe facil de errar: dentro de `[...]`, `-` so e literal se estive
 comeco, no fim, ou escapado. Aqui ele esta no meio, entao leva barra. Compare com
 `[+-]?` do expoente, onde o `-` esta no fim e por isso fica cru.
 
-### `!` — ERROR, negacao isolada ([lexical-analysis.go:96](lexical-analysis.go#L96))
+### `!` — ERROR, negacao isolada ([lexical-analysis.go:102](lexical-analysis.go#L102))
 
 Um caractere literal. Toda a inteligencia esta na **posicao**: vem depois de OPERATOR,
 entao `!=` ja foi consumido la em cima e so o `!` sozinho chega aqui. Com lookahead
 seria `!(?!=)`; sem ele, a ordem faz o trabalho.
 
-### `%` — ERROR, modulo ([lexical-analysis.go:98](lexical-analysis.go#L98))
+### `%` — ERROR, modulo ([lexical-analysis.go:104](lexical-analysis.go#L104))
 
 Um caractere literal. `%` nao e especial em regex (isso e formatacao de string, outra
 coisa).
 
-### `[&|]` — ERROR, `&` ou `|` sozinhos ([lexical-analysis.go:100](lexical-analysis.go#L100))
+### `[&|]` — ERROR, `&` ou `|` sozinhos ([lexical-analysis.go:106](lexical-analysis.go#L106))
 
 | Trecho | Leitura |
 |---|---|
@@ -415,10 +450,10 @@ coisa).
 | `\|` | literal — **dentro da classe a barra vertical perde o sentido de alternativa** |
 | `]` | fecha |
 
-Vale comparar com a regra 85: `\|\|` fora de classe precisa de escape, `[&|]` dentro de
+Vale comparar com a regra 90: `\|\|` fora de classe precisa de escape, `[&|]` dentro de
 classe nao. Pega o que sobrou de `&&`/`||`, ou seja, o simbolo solto.
 
-### `\.` — ERROR, ponto isolado ([lexical-analysis.go:102](lexical-analysis.go#L102))
+### `\.` — ERROR, ponto isolado ([lexical-analysis.go:108](lexical-analysis.go#L108))
 
 Um ponto literal. Vem depois de todas as regras de numero, entao `1.5`, `1.`, `.5` e
 `1.2.3` ja foram tratados; aqui chega o ponto de `horas.campo`, que na linguagem nao
@@ -428,7 +463,7 @@ tem significado.
 
 ## 8. Delimitadores e espaco
 
-### `[{}();,]` — DELIMITER ([lexical-analysis.go:105](lexical-analysis.go#L105))
+### `[{}();,]` — DELIMITER ([lexical-analysis.go:111](lexical-analysis.go#L111))
 
 | Trecho | Leitura |
 |---|---|
@@ -441,7 +476,7 @@ tem significado.
 Quatro caracteres que seriam metacaracteres soltos ficam inofensivos so por estarem
 dentro de `[...]`.
 
-### `[ \t\r\n]+` — espaco em branco ([lexical-analysis.go:169](lexical-analysis.go#L169))
+### `[ \t\r\n]+` — espaco em branco ([lexical-analysis.go:180](lexical-analysis.go#L180))
 
 | Trecho | Leitura |
 |---|---|
@@ -461,7 +496,7 @@ soma todas as quebras do bloco de uma so vez.
 
 ## 9. Resumo: por que a ordem da tabela e o que ela e
 
-A tabela `rules` e lida de cima para baixo e o primeiro padrao que casar vence. Cinco
+A tabela `rules` e lida de cima para baixo e o primeiro padrao que casar vence. Seis
 pares dependem disso:
 
 | Antes | Depois | Se invertesse |
@@ -470,6 +505,7 @@ pares dependem disso:
 | erros de numero | `\d+\.\d+`, `\d+` | `1.2.3` seria FLOAT `1.2` + lixo, sem erro |
 | `\d+\.\d+` (FLOAT) | `\d+\.` (erro) | `1.5` seria erro `1.` seguido de INT `5` |
 | `"..."` (STRING) | `"...` (erro) | toda string valida viraria "nao terminada" |
+| `"...\n palavra"` (quebrada) | `"...` (erro) | a string de duas linhas viraria dois erros e um identificador solto |
 | `\+\+`, `\+=`, `&&`... | `==\|!=\|...` (OPERATOR) | `++` seria dois `+` validos, sem erro |
 
 E dois pares dependem do contrario — a regra de erro vem **depois** da valida, porque e

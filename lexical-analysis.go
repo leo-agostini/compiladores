@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -77,7 +76,7 @@ var rules = []rule{
 	// Quebra de linha com a aspa de fechamento na linha seguinte: um erro
 	// so. Sem exigir a aspa, "x\ny = 1;" engoliria o comando de baixo.
 	{tokenType: "ERROR", pattern: anchored(`"(?:\\.|[^"\\\n])*\n[ \t]*(?:[a-zA-Z_][a-zA-Z0-9_]*)?"`),
-		message: "string nao terminada; falta fechar as aspas na mesma linha"},
+		message: "string quebrada em duas linhas; para quebra de linha use \\n dentro das aspas"},
 	// Depois de STRING: sobra a abertura sem fechamento, consumida ate o fim
 	// da linha para o conteudo nao virar identificador.
 	{tokenType: "ERROR", pattern: anchored(`"(?:\\.|[^"\\\n])*`),
@@ -156,6 +155,7 @@ var reserved = map[string]reservedWord{
 	"pj":          {"BOOL_LITERAL", "false"},
 
 	// Palavras-chave em ingles.
+	// Uma por conceito acima, para que todo conceito tenha os dois nomes.
 	"if":       {"KEYWORD", "if"},
 	"else":     {"KEYWORD", "else"},
 	"for":      {"KEYWORD", "for"},
@@ -220,8 +220,8 @@ func tokenize(code string) []Token {
 			// "else if" nao pode casar como WORD (o regex nao aceita
 			// espaco), entao else seguido de if e fundido aqui num token
 			// so, igualando "senao caso" ao "recurso" de uma palavra.
-			if token.Concept == "if" && len(tokens) > 0 {
-				if prev := &tokens[len(tokens)-1]; prev.Concept == "else" {
+			if token.Concept == "if" {
+				if prev := lastMeaningful(tokens); prev != nil && prev.Concept == "else" {
 					prev.Concept = "else if"
 					prev.Value += " " + value
 					line += strings.Count(value, "\n")
@@ -264,6 +264,19 @@ func tokenize(code string) []Token {
 	return tokens
 }
 
+// lastMeaningful devolve o ultimo token que nao e comentario. A fusao de
+// "senao caso" precisa disso: um comentario entre as duas palavras
+// ("senao /*x*/ caso") nao pode quebrar a construcao, ja que ele nem chega ao
+// analisador sintatico.
+func lastMeaningful(tokens []Token) *Token {
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i].Type != "COMMENT" {
+			return &tokens[i]
+		}
+	}
+	return nil
+}
+
 // invalidEscape devolve o primeiro escape nao suportado do lexema de uma
 // string. O lexema chega ja delimitado pelas aspas e com os escapes casados aos
 // pares, entao basta olhar o caractere seguinte a cada barra.
@@ -282,38 +295,11 @@ func invalidEscape(value string) (string, bool) {
 	return "", false
 }
 
-// columnOf conta a coluna (1-based) em runes, nao em bytes. "á" ocupa
-// dois bytes: sem contar runes, o token seguinte reportaria uma coluna a mais.
-// lastPos reusa essa coluna quando o erro e no fim da entrada.
+// columnOf conta a coluna (1-based) da posicao dentro da linha atual, em runes
+// e nao em bytes: "á" ocupa dois bytes, e sem contar runes todo token depois
+// dele na linha reportaria uma coluna a mais. Calcular sob demanda evita manter
+// um contador de coluna sincronizado com os saltos dos lexemas multilinha.
 func columnOf(code string, pos int) int {
 	lineStart := strings.LastIndex(code[:pos], "\n") + 1
-	return len([]rune(code[lineStart:pos])) + 1
-}
-
-func main() {
-	path := "teste.clt"
-	if len(os.Args) > 1 {
-		path = os.Args[1]
-	}
-
-	code, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "erro ao ler o arquivo: %v\n", err)
-		os.Exit(1)
-	}
-
-	tree, errs := Parse(tokenize(string(code)))
-	if tree != nil {
-		if len(errs) > 0 {
-			fmt.Println("AST parcial (contém erros):")
-		}
-		fmt.Print(tree.Pretty(""))
-	}
-	if len(errs) > 0 {
-		fmt.Fprintf(os.Stderr, "\n%d erro(s):\n", len(errs))
-		for i, e := range errs {
-			fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, e)
-		}
-		os.Exit(1)
-	}
+	return utf8.RuneCountInString(code[lineStart:pos]) + 1
 }

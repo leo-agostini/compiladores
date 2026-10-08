@@ -12,12 +12,18 @@ carteira bool off = pj;
 // divisao nao e comentario
 taxa = taxa / 2;
 taxa = taxa//comentario colado
+;
 
 carteira int /* bloco no meio */ extras = 0;
 
 /* bloco
    em varias
    linhas */
+
+// os tres blocos abaixo sao ramos deste 'caso'
+caso (ativo) {
+    horas = horas - 1;
+}
 
 senao caso (horas >= 10) {
     falta;
