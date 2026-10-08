@@ -301,24 +301,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	var errors []Token
-	for _, token := range tokenize(string(code)) {
-		concept := ""
-		if token.Concept != "" {
-			concept = "(" + token.Concept + ")"
-		}
-		fmt.Printf("linha %2d, col %2d | %-22s -> %-12s %s\n", token.Line, token.Column, display(token.Value), token.Type, concept)
-
-		if token.Type == "ERROR" {
-			errors = append(errors, token)
-		}
+	tree, errs := Parse(tokenize(string(code)))
+	if tree != nil {
+		fmt.Print(tree.Pretty(""))
 	}
-
-	if len(errors) > 0 {
-		fmt.Fprintf(os.Stderr, "\n%d erro(s) lexico(s) encontrado(s):\n", len(errors))
-		for i, token := range errors {
-			fmt.Fprintf(os.Stderr, "  %d) linha %d, col %d: %s\n     lexema: %s\n",
-				i+1, token.Line, token.Column, token.Message, display(token.Value))
+	if len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d erro(s):\n", len(errs))
+		for i, e := range errs {
+			fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, e)
 		}
 		os.Exit(1)
 	}
