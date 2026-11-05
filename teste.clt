@@ -8,6 +8,7 @@ carteira int horas = 44;
 carteira string nome = "Ana";
 carteira float taxa = 1.5;   // comentario no fim da linha
 carteira bool ativo = registrado;
+carteira int count = 0;
 
 // Declaracao de funcao: tipo de retorno, nome, parametros tipados e corpo
 float calcular(int base, float adicional) {
@@ -38,5 +39,5 @@ taxa = taxa / 2;
 
 carteira int /* bloco no meio da linha */ extras = 0;
 
-nome = reclamacao();
+nome += reclamacao(4 + a) + 2 ;
 bater_ponto(nome);

@@ -1,6 +1,6 @@
 # Os regex do tokenizer, caractere a caractere
 
-Documentacao de todos os 26 padroes de [lexical-analysis.go](lexical-analysis.go). Cada secao mostra
+Documentacao de todos os 26 padroes de [tokenizer.go](tokenizer.go). Cada secao mostra
 o padrao, decompoe cada caractere e da exemplos do que casa e do que nao casa.
 
 ---
@@ -95,7 +95,7 @@ intervalo).
 
 ## 3. Comentarios
 
-### `//[^\n]*` — COMMENT ([lexical-analysis.go:46](lexical-analysis.go#L46))
+### `//[^\n]*` — COMMENT ([tokenizer.go:46](tokenizer.go#L46))
 
 | Trecho | Leitura |
 |---|---|
@@ -111,7 +111,7 @@ que um `//` sozinho no fim do arquivo tambem case.
 - Casa: `// comentario`, `//`, `//comentario colado`
 - Nao casa: `/ / com espaco no meio`
 
-### `/\*[\s\S]*?\*/` — COMMENT ([lexical-analysis.go:47](lexical-analysis.go#L47))
+### `/\*[\s\S]*?\*/` — COMMENT ([tokenizer.go:47](tokenizer.go#L47))
 
 | Trecho | Leitura |
 |---|---|
@@ -137,7 +137,7 @@ o guloso, a linha
 
 viraria **um** comentario so, engolindo `codigo` no meio.
 
-### `/\*[\s\S]*` — ERROR, bloco nao fechado ([lexical-analysis.go:49](lexical-analysis.go#L49))
+### `/\*[\s\S]*` — ERROR, bloco nao fechado ([tokenizer.go:49](tokenizer.go#L49))
 
 O mesmo padrao anterior sem o `\*/` final e com `*` guloso: consome do `/*` ate o fim do
 arquivo.
@@ -150,7 +150,7 @@ valido do arquivo viraria erro.
 
 ## 4. Identificadores
 
-### `[a-zA-Z_][a-zA-Z0-9_]*` — WORD ([lexical-analysis.go:52](lexical-analysis.go#L52))
+### `[a-zA-Z_][a-zA-Z0-9_]*` — WORD ([tokenizer.go:52](tokenizer.go#L52))
 
 | Trecho | Leitura |
 |---|---|
@@ -177,7 +177,7 @@ inteiro, e nao a palavra `caso` seguida de um `s` solto.
 Sao oito padroes. Os cinco de erro vem **antes** de FLOAT e INT na tabela, senao o
 numero malformado seria lido pela metade: `1.2.3` viraria FLOAT `1.2` mais lixo.
 
-### `0[xXbBoO][0-9a-fA-F_]*` — ERROR, hexadecimal/binario ([lexical-analysis.go:56](lexical-analysis.go#L56))
+### `0[xXbBoO][0-9a-fA-F_]*` — ERROR, hexadecimal/binario ([tokenizer.go:56](tokenizer.go#L56))
 
 | Trecho | Leitura |
 |---|---|
@@ -195,7 +195,7 @@ Nao afeta o zero comum: `0[xXbBoO]` exige uma letra logo apos o `0`, entao em `0
 - Casa: `0x1F`, `0b1010`, `0o777`, `0x`
 - Nao casa: `0`, `0.0`, `10`
 
-### `\d+(?:\.\d+)?[eE][+-]?\d+` — ERROR, notacao cientifica ([lexical-analysis.go:58](lexical-analysis.go#L58))
+### `\d+(?:\.\d+)?[eE][+-]?\d+` — ERROR, notacao cientifica ([tokenizer.go:58](tokenizer.go#L58))
 
 | Trecho | Leitura |
 |---|---|
@@ -216,7 +216,7 @@ capturados, entao nao ha motivo para o motor guardar o texto do grupo.
 - Casa: `1e10`, `1.5e-2`, `3E+8`
 - Nao casa: `1e` (falta expoente), `e10` (falta mantissa — vira identificador)
 
-### `\d+(?:\.\d+){2,}` — ERROR, float com varios pontos ([lexical-analysis.go:60](lexical-analysis.go#L60))
+### `\d+(?:\.\d+){2,}` — ERROR, float com varios pontos ([tokenizer.go:60](tokenizer.go#L60))
 
 | Trecho | Leitura |
 |---|---|
@@ -231,7 +231,7 @@ aqui.
 - Casa: `1.2.3`, `1.5.2.3`
 - Nao casa: `1.5`, `44`
 
-### `\d+(?:\.\d+)?[a-zA-Z_][a-zA-Z0-9_]*` — ERROR, numero colado em identificador ([lexical-analysis.go:62](lexical-analysis.go#L62))
+### `\d+(?:\.\d+)?[a-zA-Z_][a-zA-Z0-9_]*` — ERROR, numero colado em identificador ([tokenizer.go:62](tokenizer.go#L62))
 
 E a juncao do padrao de numero com o de identificador: `\d+`, uma parte decimal
 opcional, e em seguida um identificador completo, sem nada entre eles.
@@ -243,7 +243,7 @@ era exatamente o bug de antes.
 - Casa: `44horas`, `1.5x`, `10_total`
 - Nao casa: `44 horas` (o espaco separa), `horas44` (comeca com letra, vira WORD)
 
-### `\.\d+` — ERROR, float sem parte inteira ([lexical-analysis.go:64](lexical-analysis.go#L64))
+### `\.\d+` — ERROR, float sem parte inteira ([tokenizer.go:64](tokenizer.go#L64))
 
 | Trecho | Leitura |
 |---|---|
@@ -253,12 +253,12 @@ era exatamente o bug de antes.
 - Casa: `.5`, `.25`
 - Nao casa: `.` sozinho (cai na regra do ponto isolado, mais abaixo)
 
-### `\d+\.\d+` — FLOAT ([lexical-analysis.go:67](lexical-analysis.go#L67))
+### `\d+\.\d+` — FLOAT ([tokenizer.go:67](tokenizer.go#L67))
 
 Digitos, ponto literal, digitos. Exige numero dos dois lados do ponto — e essa exigencia
 que deixa `1.` e `.5` sobrarem para as regras de erro.
 
-### `\d+\.` — ERROR, float sem parte decimal ([lexical-analysis.go:69](lexical-analysis.go#L69))
+### `\d+\.` — ERROR, float sem parte decimal ([tokenizer.go:69](tokenizer.go#L69))
 
 Digitos seguidos de ponto, sem exigir nada depois.
 
@@ -267,7 +267,7 @@ esta escrito **depois** dele na tabela: em `1.5` a regra 68 ja venceu, e so um `
 verdade chega ate aqui. Este e o caso mais claro de "ordem substituindo o lookahead que
 o RE2 nao tem" — com lookahead seria `\d+\.(?!\d)`.
 
-### `\d+` — INT ([lexical-analysis.go:71](lexical-analysis.go#L71))
+### `\d+` — INT ([tokenizer.go:71](tokenizer.go#L71))
 
 Um ou mais digitos. Vem por ultimo entre os numeros: se viesse antes de FLOAT, `3.14`
 seria lido como INT `3` e o resto viraria lixo.
@@ -276,7 +276,7 @@ seria lido como INT `3` e o resto viraria lixo.
 
 ## 6. Strings e caracteres
 
-### `"(\\.|[^"\\\n])*"` — STRING ([lexical-analysis.go:73](lexical-analysis.go#L73))
+### `"(\\.|[^"\\\n])*"` — STRING ([tokenizer.go:73](tokenizer.go#L73))
 
 O padrao mais denso do arquivo. Contando caractere a caractere:
 
@@ -313,7 +313,7 @@ de escape acontece em Go, na funcao `invalidEscape`, sobre o lexema ja casado.
 - Casa: `"Ana"`, `""`, `"diz \"oi\""`, `"barra dupla \\z"`
 - Nao casa: `"quebra` + nova linha, `'A'`
 
-### `"(?:\\.|[^"\\\n])*` — ERROR, string nao terminada ([lexical-analysis.go:76](lexical-analysis.go#L76))
+### `"(?:\\.|[^"\\\n])*` — ERROR, string nao terminada ([tokenizer.go:76](tokenizer.go#L76))
 
 Identico ao anterior, sem as aspas de fechamento (e com `(?:`). Consome da aspa aberta
 ate o fim da linha.
@@ -322,7 +322,7 @@ Vem **depois** de STRING, entao so recebe o que nao tinha par. E consumir tudo a
 da linha e o que mata a cascata: antes, `"nao fecha;` gerava um ERROR na aspa e depois
 tokenizava `nao` e `fecha` como identificadores.
 
-### `'(?:\\.|[^'\\\n])*'?` — ERROR, aspas simples ([lexical-analysis.go:78](lexical-analysis.go#L78))
+### `'(?:\\.|[^'\\\n])*'?` — ERROR, aspas simples ([tokenizer.go:78](tokenizer.go#L78))
 
 Mesma estrutura, com `'` no lugar de `"`, e o fechamento marcado com `?`:
 
@@ -344,7 +344,7 @@ manda usar aspas duplas.
 Os quatro padroes de erro abaixo vem **antes** de OPERATOR. Sem isso, `++` seria lido
 como dois `+` validos e nenhum erro apareceria.
 
-### `&&|\|\|` — ERROR, operadores logicos ([lexical-analysis.go:84](lexical-analysis.go#L84))
+### `&&|\|\|` — ERROR, operadores logicos ([tokenizer.go:84](tokenizer.go#L84))
 
 - `&` `&` — dois "e comercial" literais; `&` nao tem poder especial em regex
 - `|` — a alternativa
@@ -352,7 +352,7 @@ como dois `+` validos e nenhum erro apareceria.
   escape, senao seria mais uma alternativa (e `&&|||` seria lido como "`&&` ou vazio ou
   vazio")
 
-### `\+\+|--` — ERROR, incremento/decremento ([lexical-analysis.go:86](lexical-analysis.go#L86))
+### `\+\+|--` — ERROR, incremento/decremento ([tokenizer.go:86](tokenizer.go#L86))
 
 - `\+` `\+` — dois `+` literais; sem a barra, `+` seria o quantificador "um ou mais"
 - `|` — ou
@@ -361,19 +361,19 @@ como dois `+` validos e nenhum erro apareceria.
 O contraste `\+` versus `-` na mesma linha resume a regra: escapa-se so o que tem poder
 naquela posicao.
 
-### `\+=|-=|\*=|/=|%=` — ERROR, atribuicao composta ([lexical-analysis.go:88](lexical-analysis.go#L88))
+### `\+=|-=|\*=|/=|%=` — ERROR, atribuicao composta ([tokenizer.go:88](tokenizer.go#L88))
 
 Cinco alternativas de dois caracteres. Os escapes: `\+` (quantificador) e `\*`
 (quantificador). Ja `/` e `%` sao literais comuns — em Go o padrao e uma string, nao
 tem delimitadores `/.../` como em JavaScript, entao a barra nao precisa de escape.
 
-### `<<|>>` — ERROR, deslocamento de bits ([lexical-analysis.go:90](lexical-analysis.go#L90))
+### `<<|>>` — ERROR, deslocamento de bits ([tokenizer.go:90](tokenizer.go#L90))
 
 Quatro caracteres literais em duas alternativas. `<` e `>` nao sao especiais em RE2.
 
 Nao conflita com `<=` e `>=`, que tem o segundo caractere diferente.
 
-### `==|!=|<=|>=|[+\-*/<>=]` — OPERATOR ([lexical-analysis.go:93](lexical-analysis.go#L93))
+### `==|!=|<=|>=|[+\-*/<>=]` — OPERATOR ([tokenizer.go:93](tokenizer.go#L93))
 
 | Trecho | Leitura |
 |---|---|
@@ -395,18 +395,18 @@ O `\-` e o detalhe facil de errar: dentro de `[...]`, `-` so e literal se estive
 comeco, no fim, ou escapado. Aqui ele esta no meio, entao leva barra. Compare com
 `[+-]?` do expoente, onde o `-` esta no fim e por isso fica cru.
 
-### `!` — ERROR, negacao isolada ([lexical-analysis.go:96](lexical-analysis.go#L96))
+### `!` — ERROR, negacao isolada ([tokenizer.go:96](tokenizer.go#L96))
 
 Um caractere literal. Toda a inteligencia esta na **posicao**: vem depois de OPERATOR,
 entao `!=` ja foi consumido la em cima e so o `!` sozinho chega aqui. Com lookahead
 seria `!(?!=)`; sem ele, a ordem faz o trabalho.
 
-### `%` — ERROR, modulo ([lexical-analysis.go:98](lexical-analysis.go#L98))
+### `%` — ERROR, modulo ([tokenizer.go:98](tokenizer.go#L98))
 
 Um caractere literal. `%` nao e especial em regex (isso e formatacao de string, outra
 coisa).
 
-### `[&|]` — ERROR, `&` ou `|` sozinhos ([lexical-analysis.go:100](lexical-analysis.go#L100))
+### `[&|]` — ERROR, `&` ou `|` sozinhos ([tokenizer.go:100](tokenizer.go#L100))
 
 | Trecho | Leitura |
 |---|---|
@@ -418,7 +418,7 @@ coisa).
 Vale comparar com a regra 85: `\|\|` fora de classe precisa de escape, `[&|]` dentro de
 classe nao. Pega o que sobrou de `&&`/`||`, ou seja, o simbolo solto.
 
-### `\.` — ERROR, ponto isolado ([lexical-analysis.go:102](lexical-analysis.go#L102))
+### `\.` — ERROR, ponto isolado ([tokenizer.go:102](tokenizer.go#L102))
 
 Um ponto literal. Vem depois de todas as regras de numero, entao `1.5`, `1.`, `.5` e
 `1.2.3` ja foram tratados; aqui chega o ponto de `horas.campo`, que na linguagem nao
@@ -428,7 +428,7 @@ tem significado.
 
 ## 8. Delimitadores e espaco
 
-### `[{}();,]` — DELIMITER ([lexical-analysis.go:105](lexical-analysis.go#L105))
+### `[{}();,]` — DELIMITER ([tokenizer.go:105](tokenizer.go#L105))
 
 | Trecho | Leitura |
 |---|---|
@@ -441,7 +441,7 @@ tem significado.
 Quatro caracteres que seriam metacaracteres soltos ficam inofensivos so por estarem
 dentro de `[...]`.
 
-### `[ \t\r\n]+` — espaco em branco ([lexical-analysis.go:169](lexical-analysis.go#L169))
+### `[ \t\r\n]+` — espaco em branco ([tokenizer.go:169](tokenizer.go#L169))
 
 | Trecho | Leitura |
 |---|---|

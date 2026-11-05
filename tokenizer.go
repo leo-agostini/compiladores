@@ -316,4 +316,14 @@ func main() {
 		}
 		os.Exit(1)
 	}
+	// A arvore parcial deixa nome que o parser nao leu. Isso pareceria
+	// "nao declarado" e esconderia o erro sintatico de verdade.
+	semErrs := Analyze(tree)
+	if len(semErrs) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d erro(s) semantico(s):\n", len(semErrs))
+		for i, e := range semErrs {
+			fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, e)
+		}
+		os.Exit(1)
+	}
 }

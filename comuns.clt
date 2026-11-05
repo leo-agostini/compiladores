@@ -11,7 +11,7 @@ carteira bool off = pj;
 
 // divisao nao e comentario
 taxa = taxa / 2;
-taxa = taxa//comentario colado
+taxa = taxa//comentario colado;
 
 carteira int /* bloco no meio */ extras = 0;
 
