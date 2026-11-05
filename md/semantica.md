@@ -36,13 +36,43 @@ void f() {
 
 Uma entrada é um `Symbol`:
 
-| Campo | Variável | Função |
-|---|---|---|
-| `Kind` | `"var"` | `"func"` |
-| `Type` | tipo da variável | tipo de retorno |
-| `Params` | vazio | tipo de cada parâmetro, na ordem |
+| Campo | Variável | Parâmetro | Função |
+|---|---|---|---|
+| `Name` | nome no fonte | nome no fonte | nome no fonte |
+| `Kind` | `"var"` | `"param"` | `"func"` |
+| `Type` | tipo da variável | tipo do parâmetro | tipo de retorno |
+| `Params` | vazio | vazio | tipo de cada parâmetro, na ordem |
+| `Scope` | rótulo do escopo | rótulo do escopo | rótulo do escopo |
+| `Line`, `Column` | posição do nome | posição do nome | posição do nome |
 
-Variável e função dividem o mesmo espaço de nomes. `x = 1` exige `Kind == "var"`. `x(...)` exige `Kind == "func"`.
+Variável, parâmetro e função dividem o mesmo espaço de nomes. `x = 1` e `x` exigem que o símbolo não seja função. `x(...)` exige `Kind == "func"`.
+
+O rótulo do escopo é `global` no arquivo, `local (f)` nos parâmetros e no corpo da função `f`, e `aninhado (f)` num `{ }` ou `jornada` dentro dela. Fora de função, um bloco é só `aninhado`.
+
+## Tabela impressa
+
+Cada símbolo inserido também vai para uma lista, que sobrevive ao fim do escopo. `Analyze` devolve essa lista na ordem do fonte, e o `main` a imprime depois da árvore, mesmo quando há erro semântico. Para o exemplo do slide 19:
+
+```text
+NOME  CATEGORIA  TIPO   ESCOPO           POSICAO
+gg    variavel   int    global           5:14
+main  funcao     int()  global           7:5
+a     variavel   int    local (main)     8:18
+b     variavel   int    local (main)     9:18
+c     variavel   int    aninhado (main)  11:22
+```
+
+Função mostra a assinatura no tipo: `float(int, int)`.
+
+## Testes
+
+```text
+go test ./...
+```
+
+[semantica.clt](../semantica.clt) é um programa válido: o teste exige zero erros e confere as entradas da tabela, incluindo a do slide 19.
+
+[semantica_erros.clt](../semantica_erros.clt) tem um erro por verificação. Cada linha que deve falhar termina com `// espera: <mensagem>`; duas mensagens na mesma linha se separam por ` | `. O teste exige exatamente esses erros, sem faltar nem sobrar. Para cobrir um caso novo, basta acrescentar a linha e o comentário.
 
 ## Onde cada escopo abre
 
@@ -94,7 +124,7 @@ A condição de `if`, `else if`, `while` e `for` tem de ser `bool`. `jornada (;;
 
 | Situação | Mensagem |
 |---|---|
-| nome repetido no mesmo escopo | `'x' ja foi declarado neste escopo` |
+| nome repetido no mesmo escopo | `'x' ja foi declarado neste escopo (linha 3)`, com a linha da primeira declaração |
 | variável `void` | `variavel 'x' nao pode ser void` |
 | inicialização com outro tipo | `tipos incompativeis na declaracao de 'w': esperado int, encontrado bool` |
 | uso de nome inexistente | `variavel 'z' nao declarada` |
@@ -107,7 +137,7 @@ A condição de `if`, `else if`, `while` e `for` tem de ser `bool`. `jornada (;;
 | chamada de variável | `'horas' nao e uma funcao` |
 | argumento com tipo errado | `chamada de 'soma': argumento 2 esperado int, encontrado string` |
 | quantidade de argumentos | `chamada de 'soma': esperado 2 argumento(s), encontrado 1` |
-| parâmetro repetido | `parametro 'x' repetido` |
+| parâmetro repetido | `parametro 'x' repetido (linha 1)` |
 | parâmetro `void` | `parametro 'v' nao pode ser void` |
 | `return` fora de função | `return fora de funcao` |
 | valor numa função `void` | `return com valor em funcao void` |

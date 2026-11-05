@@ -15,7 +15,7 @@ Para compilar um arquivo:
 go run . teste.clt
 ```
 
-Sem argumento, o programa lê `teste.clt`. A saída padrão mostra a árvore. Erro léxico, sintático ou semântico vai para a saída de erro e o processo termina com código 1. A análise semântica só roda quando a árvore está inteira.
+Sem argumento, o programa lê `teste.clt`. A saída padrão mostra a árvore e, quando ela está inteira, a tabela de símbolos. Erro léxico, sintático ou semântico vai para a saída de erro e o processo termina com código 1. A análise semântica só roda quando a árvore está inteira.
 
 ---
 

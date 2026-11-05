@@ -1,0 +1,63 @@
+// testes semanticos validos — a analise nao deve reportar erro.
+// semantic_test.go confere tambem a tabela de simbolos gerada.
+
+// exemplo do slide 19: global, local e aninhado
+carteira int gg = 4;
+
+int main() {
+    carteira int a = 5;
+    carteira int b = a + 2;
+    caso (b > a) {
+        carteira int c = 4 + b;
+        a = a + c + gg;
+    }
+    rescindir a;
+}
+
+// recursao: a funcao ja esta na tabela antes do corpo
+int fatorial(int n) {
+    caso (n <= 1) {
+        rescindir 1;
+    }
+    rescindir n * fatorial(n - 1);
+}
+
+// chamada adiantada: bar e declarada depois de foo
+void foo() {
+    bar();
+}
+void bar() {
+    bater_ponto("bar");
+}
+
+// coercao int -> float e comparacao gerando bool (slide 32)
+float media(int total, int qtd) {
+    carteira float m = total;
+    rescindir m / qtd;
+}
+
+contratar avisar(string mensagem) void {
+    bater_ponto(mensagem);
+}
+
+// sombreamento em bloco interno e variavel do for
+void escopos() {
+    carteira int x = 20;
+    {
+        carteira int x = 1;
+        carteira int y = x + 1;
+    }
+    jornada (carteira int i = 0; i < 3; i = i + 1) {
+        bater_ponto(i);
+    }
+    plantao (x != 0) {
+        x = x - 1;
+        falta;
+    }
+}
+
+carteira float y = gg + 2.0;
+carteira bool z = (y > 3);
+carteira bool igual = z == registrado;
+carteira string nome = reclamacao();
+avisar(nome);

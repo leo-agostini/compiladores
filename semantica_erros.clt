@@ -1,0 +1,80 @@
+// testes semanticos invalidos — cada "espera:" e o erro daquela linha.
+// semantic_test.go confere que saem exatamente esses erros, nem mais nem menos.
+
+int soma(int a, int b) {
+    rescindir a + b;
+}
+
+// retorno (slide 28)
+int dobro(int x) {
+    rescindir "dois"; // espera: return incompativel: esperado int, encontrado string
+}
+void nada() {
+    rescindir 1; // espera: return com valor em funcao void
+}
+int semValor() {
+    rescindir; // espera: return sem valor em funcao int
+}
+
+// escopo (slide 14): y morre no fim do bloco
+void f() {
+    carteira int x = 10;
+    {
+        carteira int y = x + 1;
+    }
+    carteira int k = y; // espera: variavel 'y' nao declarada
+}
+
+int main() {
+    carteira int a = 5;
+    // nao declarada (slide 23)
+    carteira int b = a + z; // espera: variavel 'z' nao declarada
+    // duplicidade (slide 24)
+    carteira int a = 10; // espera: 'a' ja foi declarado neste escopo (linha 29)
+    // tipos incompativeis (slides 9 e 25)
+    carteira int t = registrado; // espera: tipos incompativeis na declaracao de 't': esperado int, encontrado bool
+    carteira float u = "texto"; // espera: tipos incompativeis na declaracao de 'u': esperado float, encontrado string
+    carteira bool v = 3.14 + 1; // espera: tipos incompativeis na declaracao de 'v': esperado bool, encontrado float
+    carteira int q = 3 + registrado; // espera: operacao '+' invalida entre int e bool
+    carteira int i = 2.5; // espera: tipos incompativeis na declaracao de 'i': esperado int, encontrado float
+    a = "x"; // espera: tipos incompativeis na atribuicao de 'a': esperado int, encontrado string
+    carteira string s = "a" + "b"; // espera: operacao '+' invalida entre string e string
+    carteira bool c = "a" == 1; // espera: operacao '==' invalida entre string e int
+    carteira bool m = -registrado; // espera: operador '-' invalido para bool
+    carteira bool r = registrado < pj; // espera: operacao '<' invalida entre bool e bool
+    caso (a) { // espera: condicao do if deve ser bool, encontrado int
+        a = 1;
+    }
+    plantao (a + 1) { // espera: condicao do while deve ser bool, encontrado int
+        falta;
+    }
+    // chamadas (slide 27)
+    soma(3, "texto"); // espera: chamada de 'soma': argumento 2 esperado int, encontrado string
+    soma(3); // espera: chamada de 'soma': esperado 2 argumento(s), encontrado 1
+    soma(3, 4, 5); // espera: chamada de 'soma': esperado 2 argumento(s), encontrado 3
+    naoexiste(1); // espera: funcao 'naoexiste' nao declarada
+    a(1); // espera: 'a' nao e uma funcao
+    carteira int h = soma; // espera: 'soma' e uma funcao; chame com 'soma(...)'
+    carteira int w = nada(); // espera: expressao void nao pode ser usada como valor
+    // sem cascata: so os nomes que faltam aparecem
+    carteira int e = (z + 1) * 2 + w2; // espera: variavel 'z' nao declarada | variavel 'w2' nao declarada
+    rescindir a;
+}
+
+// parametros
+int g(int p,
+      int p) { // espera: parametro 'p' repetido (linha 65)
+    rescindir p;
+}
+void h(int n) {
+    carteira int n = 1; // espera: 'n' ja foi declarado neste escopo (linha 69)
+}
+
+// funcao e variavel dividem o nome
+void soma() { // espera: 'soma' ja foi declarado neste escopo (linha 4)
+}
+carteira int soma = 1; // espera: 'soma' ja foi declarado neste escopo (linha 4)
+carteira int auto = auto; // espera: variavel 'auto' nao declarada
+
+rescindir 1; // espera: return fora de funcao
+falta; // espera: break fora de laco

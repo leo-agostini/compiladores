@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
+	"text/tabwriter"
 )
 
 const (
@@ -15,23 +17,31 @@ const (
 	TypeError = "error"
 )
 
-// variavel e funcao dividem o nome. Params so na funcao.
+// variavel, parametro e funcao dividem o nome. Params so na funcao.
 type Symbol struct {
+	Name string
+	// "var", "param" ou "func".
 	Kind   string
 	Type   string
 	Params []string
+	// rotulo do escopo onde foi declarado: global, local (f), aninhado (f).
+	Scope  string
+	Line   int
+	Column int
 }
 
 // parent e o escopo de fora. Duplicata so no mapa local.
 type SymbolTable struct {
 	symbols map[string]Symbol
 	parent  *SymbolTable
+	scope   string
 }
 
-func newSymbolTable(parent *SymbolTable) *SymbolTable {
+func newSymbolTable(parent *SymbolTable, scope string) *SymbolTable {
 	return &SymbolTable{
 		symbols: make(map[string]Symbol),
 		parent:  parent,
+		scope:   scope,
 	}
 }
 
@@ -52,9 +62,13 @@ func (st *SymbolTable) Resolve(name string) (Symbol, bool) {
 type SemanticAnalyzer struct {
 	current    *SymbolTable
 	returnType string
+	// funcao em analise, para rotular os escopos de dentro dela.
+	funcName string
 	// break so vale dentro de for/while.
 	loopDepth int
 	errs      []semErr
+	// todo simbolo inserido, inclusive os de escopos ja fechados.
+	declared []Symbol
 }
 
 // posicao fora do texto, para ordenar a saida por linha.
@@ -65,12 +79,20 @@ type semErr struct {
 }
 
 func newSemanticAnalyzer() *SemanticAnalyzer {
-	return &SemanticAnalyzer{current: newSymbolTable(nil)}
+	return &SemanticAnalyzer{current: newSymbolTable(nil, "global")}
 }
 
-func Analyze(root Node) []string {
+// devolve a tabela (ordem do fonte) e os erros (ordem de linha).
+func Analyze(root Node) ([]Symbol, []string) {
 	sa := newSemanticAnalyzer()
 	sa.analyze(root)
+	// funcao entra antes do resto do escopo; a tabela volta para a ordem do fonte.
+	sort.SliceStable(sa.declared, func(i, j int) bool {
+		if sa.declared[i].Line != sa.declared[j].Line {
+			return sa.declared[i].Line < sa.declared[j].Line
+		}
+		return sa.declared[i].Column < sa.declared[j].Column
+	})
 	sort.SliceStable(sa.errs, func(i, j int) bool {
 		if sa.errs[i].line != sa.errs[j].line {
 			return sa.errs[i].line < sa.errs[j].line
@@ -85,15 +107,65 @@ func Analyze(root Node) []string {
 		}
 		out[i] = e.text
 	}
-	return out
+	return sa.declared, out
+}
+
+// uma linha por simbolo: nome, categoria, tipo, escopo e posicao.
+func FormatSymbols(symbols []Symbol) string {
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NOME\tCATEGORIA\tTIPO\tESCOPO\tPOSICAO")
+	for _, s := range symbols {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d:%d\n", s.Name, kindLabel(s.Kind), typeLabel(s), s.Scope, s.Line, s.Column)
+	}
+	w.Flush()
+	return b.String()
+}
+
+func kindLabel(kind string) string {
+	switch kind {
+	case "func":
+		return "funcao"
+	case "param":
+		return "parametro"
+	}
+	return "variavel"
+}
+
+// funcao mostra a assinatura: int(int, float).
+func typeLabel(s Symbol) string {
+	if s.Kind != "func" {
+		return s.Type
+	}
+	return s.Type + "(" + strings.Join(s.Params, ", ") + ")"
 }
 
 func (sa *SemanticAnalyzer) errorAt(line, col int, format string, args ...any) {
 	sa.errs = append(sa.errs, semErr{line: line, col: col, text: fmt.Sprintf(format, args...)})
 }
 
-func (sa *SemanticAnalyzer) enter() {
-	sa.current = newSymbolTable(sa.current)
+// insere no escopo atual e guarda uma copia para a tabela impressa.
+func (sa *SemanticAnalyzer) define(sym Symbol) {
+	sym.Scope = sa.current.scope
+	sa.current.Define(sym.Name, sym)
+	sa.declared = append(sa.declared, sym)
+}
+
+// mensagem de duplicata aponta onde o nome ja estava.
+func (sa *SemanticAnalyzer) duplicate(line, col int, prev Symbol, format string, name string) {
+	sa.errorAt(line, col, format+" (linha %d)", name, prev.Line)
+}
+
+func (sa *SemanticAnalyzer) enter(scope string) {
+	sa.current = newSymbolTable(sa.current, scope)
+}
+
+// bloco, for: aninhado dentro da funcao atual, ou do global.
+func (sa *SemanticAnalyzer) nestedScope() string {
+	if sa.funcName == "" {
+		return "aninhado"
+	}
+	return "aninhado (" + sa.funcName + ")"
 }
 
 func (sa *SemanticAnalyzer) leave() {
@@ -109,8 +181,8 @@ func (sa *SemanticAnalyzer) declareFuncs(decls []Node) {
 		if !ok || fn.Name == "" {
 			continue
 		}
-		if _, exists := sa.current.symbols[fn.Name]; exists {
-			sa.errorAt(fn.Line, fn.Column, "'%s' ja foi declarado neste escopo", fn.Name)
+		if prev, exists := sa.current.symbols[fn.Name]; exists {
+			sa.duplicate(fn.Line, fn.Column, prev, "'%s' ja foi declarado neste escopo", fn.Name)
 			continue
 		}
 		ret := fn.Return
@@ -124,7 +196,7 @@ func (sa *SemanticAnalyzer) declareFuncs(decls []Node) {
 				params[i] = p.Type
 			}
 		}
-		sa.current.Define(fn.Name, Symbol{Kind: "func", Type: ret, Params: params})
+		sa.define(Symbol{Name: fn.Name, Kind: "func", Type: ret, Params: params, Line: fn.Line, Column: fn.Column})
 	}
 }
 
@@ -139,7 +211,7 @@ func (sa *SemanticAnalyzer) analyze(n Node) string {
 			sa.analyze(d)
 		}
 	case *Block:
-		sa.enter()
+		sa.enter(sa.nestedScope())
 		sa.declareFuncs(n.Decls)
 		for _, d := range n.Decls {
 			sa.analyze(d)
@@ -159,7 +231,7 @@ func (sa *SemanticAnalyzer) analyze(n Node) string {
 		sa.analyze(n.Else)
 	case *ForStmt:
 		// a variavel do init morre no fim do for.
-		sa.enter()
+		sa.enter(sa.nestedScope())
 		sa.analyze(n.Init)
 		if n.Cond != nil {
 			sa.expectBool(n.Cond, "for")
@@ -210,9 +282,9 @@ func (sa *SemanticAnalyzer) analyzeFunc(n *FuncDecl) {
 	if ret == "" {
 		ret = TypeVoid
 	}
-	prev := sa.returnType
-	sa.returnType = ret
-	sa.enter()
+	prevRet, prevName := sa.returnType, sa.funcName
+	sa.returnType, sa.funcName = ret, n.Name
+	sa.enter("local (" + n.Name + ")")
 	for _, p := range n.Params {
 		sa.defineParam(p)
 	}
@@ -224,15 +296,15 @@ func (sa *SemanticAnalyzer) analyzeFunc(n *FuncDecl) {
 		}
 	}
 	sa.leave()
-	sa.returnType = prev
+	sa.returnType, sa.funcName = prevRet, prevName
 }
 
 func (sa *SemanticAnalyzer) defineParam(p *Param) {
 	if p == nil || p.Name == "" {
 		return
 	}
-	if _, exists := sa.current.symbols[p.Name]; exists {
-		sa.errorAt(p.Line, p.Column, "parametro '%s' repetido", p.Name)
+	if prev, exists := sa.current.symbols[p.Name]; exists {
+		sa.duplicate(p.Line, p.Column, prev, "parametro '%s' repetido", p.Name)
 		return
 	}
 	typ := p.Type
@@ -240,7 +312,7 @@ func (sa *SemanticAnalyzer) defineParam(p *Param) {
 		sa.errorAt(p.Line, p.Column, "parametro '%s' nao pode ser void", p.Name)
 		typ = TypeError
 	}
-	sa.current.Define(p.Name, Symbol{Kind: "var", Type: typ})
+	sa.define(Symbol{Name: p.Name, Kind: "param", Type: typ, Line: p.Line, Column: p.Column})
 }
 
 func (sa *SemanticAnalyzer) analyzeVar(n *VarDecl) {
@@ -251,20 +323,21 @@ func (sa *SemanticAnalyzer) analyzeVar(n *VarDecl) {
 	if n.Name == "" {
 		return
 	}
-	if _, exists := sa.current.symbols[n.Name]; exists {
-		sa.errorAt(n.Line, n.Column, "'%s' ja foi declarado neste escopo", n.Name)
+	if prev, exists := sa.current.symbols[n.Name]; exists {
+		sa.duplicate(n.Line, n.Column, prev, "'%s' ja foi declarado neste escopo", n.Name)
 		return
 	}
-	typ := n.Type
-	if typ == "" || typ == TypeVoid {
+	sym := Symbol{Name: n.Name, Kind: "var", Type: n.Type, Line: n.Line, Column: n.Column}
+	if sym.Type == "" || sym.Type == TypeVoid {
 		sa.errorAt(n.Line, n.Column, "variavel '%s' nao pode ser void", n.Name)
-		sa.current.Define(n.Name, Symbol{Kind: "var", Type: TypeError})
+		sym.Type = TypeError
+		sa.define(sym)
 		return
 	}
-	if n.Init != nil && !assignable(typ, initType) {
-		sa.errorAt(n.Line, n.Column, "tipos incompativeis na declaracao de '%s': esperado %s, encontrado %s", n.Name, typ, initType)
+	if n.Init != nil && !assignable(sym.Type, initType) {
+		sa.errorAt(n.Line, n.Column, "tipos incompativeis na declaracao de '%s': esperado %s, encontrado %s", n.Name, sym.Type, initType)
 	}
-	sa.current.Define(n.Name, Symbol{Kind: "var", Type: typ})
+	sa.define(sym)
 }
 
 func (sa *SemanticAnalyzer) analyzeReturn(n *ReturnStmt) {
@@ -302,7 +375,7 @@ func (sa *SemanticAnalyzer) analyzeAssign(n *Assign) string {
 		sa.errorAt(n.Line, n.Column, "variavel '%s' nao declarada", n.Name)
 		return TypeError
 	}
-	if sym.Kind != "var" {
+	if sym.Kind == "func" {
 		sa.errorAt(n.Line, n.Column, "'%s' e uma funcao; chame com '%s(...)'", n.Name, n.Name)
 		return TypeError
 	}
@@ -318,7 +391,7 @@ func (sa *SemanticAnalyzer) analyzeIdent(n *Ident) string {
 		sa.errorAt(n.Line, n.Column, "variavel '%s' nao declarada", n.Name)
 		return TypeError
 	}
-	if sym.Kind != "var" {
+	if sym.Kind == "func" {
 		sa.errorAt(n.Line, n.Column, "'%s' e uma funcao; chame com '%s(...)'", n.Name, n.Name)
 		return TypeError
 	}
