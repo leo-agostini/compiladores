@@ -8,6 +8,7 @@ Os outros documentos:
 - [tokenizer.md](tokenizer.md) — tokens, palavras reservadas e o que o lexer entrega
 - [parser.md](parser.md) — gramática e a árvore sintática
 - [semantica.md](semantica.md) — escopos, tipos e mensagens de erro
+- [codigo.md](codigo.md) — código de três endereços, MIPS e alocação ingênua
 
 Para compilar um arquivo:
 
@@ -16,6 +17,8 @@ go run . teste.clt
 ```
 
 Sem argumento, o programa lê `teste.clt`. A saída padrão mostra a árvore e, quando ela está inteira, a tabela de símbolos. Erro léxico, sintático ou semântico vai para a saída de erro e o processo termina com código 1. A análise semântica só roda quando a árvore está inteira.
+
+Sem erro semântico, o programa imprime também o código de três endereços e a alocação de cada nome, e escreve o assembly MIPS em `arquivo.asm` (ou no caminho passado como segundo argumento). Para rodar: `spim -file arquivo.asm`, ou abrir no MARS.
 
 ---
 

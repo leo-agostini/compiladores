@@ -327,4 +327,29 @@ func main() {
 		}
 		os.Exit(1)
 	}
+
+	// So um programa semanticamente valido chega aqui: o gerador confia nos
+	// tipos e nomes ja conferidos.
+	tac, genErrs := GenerateTAC(tree)
+	if len(genErrs) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d erro(s) na geracao de codigo:\n", len(genErrs))
+		for i, e := range genErrs {
+			fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, e)
+		}
+		os.Exit(1)
+	}
+	fmt.Print("\nCodigo de tres enderecos:\n", tac)
+
+	asm, frames := GenerateMIPS(tac)
+	fmt.Print("\nAlocacao (ingenua):\n", FormatAllocation(frames))
+
+	out := strings.TrimSuffix(path, ".clt") + ".asm"
+	if len(os.Args) > 2 {
+		out = os.Args[2]
+	}
+	if err := os.WriteFile(out, []byte(asm), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "erro ao escrever %s: %v\n", out, err)
+		os.Exit(1)
+	}
+	fmt.Printf("\nMIPS escrito em %s (rode com: spim -file %s)\n", out, out)
 }

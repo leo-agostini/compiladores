@@ -1,0 +1,94 @@
+// programa de teste da geracao de codigo (TAC -> MIPS).
+// codegen_test.go compila, roda no spim e confere a saida no fim deste arquivo.
+
+// teste inicial da aula: d = (a + b) * c
+carteira int a = 2;
+carteira int b = 3;
+carteira int c = 4;
+carteira int d;
+d = (a + b) * c;
+bater_ponto(d);
+
+// recursao: parametros e locais no quadro de cada chamada
+int fatorial(int n) {
+    caso (n <= 1) {
+        rescindir 1;
+    }
+    rescindir n * fatorial(n - 1);
+}
+bater_ponto(fatorial(5));
+
+// int vira float na chamada e na operacao
+float media(int total, int qtd) {
+    carteira float m = total;
+    rescindir m / qtd;
+}
+bater_ponto(media(7, 2));
+carteira float taxa = 1.5;
+taxa = taxa * 2 + a;
+bater_ponto(taxa, taxa > 4.5, taxa >= 5.0);
+
+// precedencia, menos unario e divisao inteira
+bater_ponto(-a + b * c - 10 / 3);
+
+// for com break, while, else if
+carteira int soma = 0;
+jornada (carteira int i = 1; i <= 10; i = i + 1) {
+    caso (i == 6) {
+        falta;
+    }
+    soma = soma + i;
+}
+bater_ponto("soma", soma);
+
+carteira int n = 3;
+plantao (n > 0) {
+    caso (n == 3) {
+        bater_ponto("tres");
+    } recurso (n == 2) {
+        bater_ponto("dois");
+    } senao {
+        bater_ponto("um");
+    }
+    n = n - 1;
+}
+
+// sombreamento: o x de dentro e outro endereco
+carteira int x = 1;
+{
+    carteira int x = 2;
+    bater_ponto(x);
+}
+bater_ponto(x);
+
+// strings, bool e atribuicao encadeada
+contratar saudar(string nome) {
+    caso (nome == "Ana") {
+        bater_ponto("oi,", nome);
+    } senao {
+        bater_ponto("quem e voce?");
+    }
+}
+saudar("Ana");
+saudar("Bia");
+carteira int p;
+carteira int q;
+p = q = 7;
+bater_ponto(p + q, registrado, 1 != 1);
+
+/* saida esperada:
+20
+120
+3.50000000
+5.00000000 true true
+7
+soma 15
+tres
+dois
+um
+2
+1
+oi, Ana
+quem e voce?
+14 true false
+*/

@@ -1,0 +1,4 @@
+# binario de go build
+/m
+# assembly gerado por go run . arquivo.clt
+*.asm
